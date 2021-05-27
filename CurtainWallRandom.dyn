@@ -1,0 +1,220 @@
+{
+  "Uuid": "2695cf28-f410-4ac1-b790-35faf3911ae6",
+  "IsCustomNode": false,
+  "Description": null,
+  "Name": "CurtainWallRandom",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "Dynamo.Nodes.DSModelElementSelection, DSRevitNodesUI",
+      "NodeType": "ExtensionNode",
+      "InstanceId": [
+        "b68cc0b7-8b24-4381-a166-bf86d4e2ae02-00015c7b"
+      ],
+      "Id": "edfe3e417c9844ed97e9b7ab080fdea9",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "a34e34e074a0489caab7535f785712af",
+          "Name": "Element",
+          "Description": "The selected elements.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Copyright (c)2017 By Travis M Williams\nimport clr\nclr.AddReference('ProtoGeometry')\nimport Autodesk.DesignScript.Geometry as dsGeo\n\nimport sys\nsys.path.append('C:\\Program Files (x86)\\IronPython 2.7\\Lib')\nimport random\n\nclr.AddReference('RevitNodes')\nimport Revit\nclr.ImportExtensions(Revit.Elements)\nclr.ImportExtensions(Revit.GeometryConversion)\n\nclr.AddReference('RevitAPI')\nfrom Autodesk.Revit.DB import *\n\nclr.AddReference('RevitServices')\nfrom RevitServices.Persistence import DocumentManager\nfrom RevitServices.Transactions import TransactionManager\n\nimport math\n\ndef vStartPoints(uCurve,vSpace,vRange):\n\tpts = []\n\tcurLen = uCurve.Length\n\tnumV = int(math.ceil(curLen/vSpace))\n\tsegLen = 0\n\tfor i in range(0,numV-1):\n\t\ttry:\n\t\t\tvAdj = random.uniform(-vRange,vRange)\n\t\texcept:\n\t\t\tvAdj= 0\n\t\tsegLen = segLen+(curLen/numV)+vAdj\n\t\t\n\t\tpt = uCurve.PointAtSegmentLength(segLen)\n\t\tpts.append(pt)\n\treturn pts\n\t\nwall = UnwrapElement(IN[0])\nvAdjMax= IN[1]\nvMax = IN[2]\n\n# Variables\ndoc = DocumentManager.Instance.CurrentDBDocument\nunits=1\nunitSys = doc.DisplayUnitSystem\nif str(unitSys)==\"METRIC\":\n\tunits = 304.8\n\n#get unit types for multiplier\nlvlColl = FilteredElementCollector(doc).OfClass(Level).WhereElementIsNotElementType().ToElements()\nlvlElevs = [e.ProjectElevation for e in lvlColl]\n\nlocCur = wall.Location.Curve\n\t\t\np0 = locCur.GetEndPoint(0)\nuCur = locCur.ToProtoType()#base curve run horizontal dir\n\nTransactionManager.Instance.EnsureInTransaction(doc)\n\n#clear all existing grids\ndoc.Delete(wall.CurtainGrid.GetUGridLineIds())\ndoc.Delete(wall.CurtainGrid.GetVGridLineIds())\n\n#create u grids to split wall into sections first\nuGridCurs = [locCur]#start list with base curve\n\n#create u grid by levels\nfor el in lvlElevs[1:-1]:\n\tpt = XYZ(p0.X,p0.Y,el)\n\tuGrid = wall.CurtainGrid.AddGridLine(True, pt, False) #horizontal grids\n\tuGridCurs.append(uGrid.AllSegmentCurves[0])#this curve is for calculate vertical curve start points\n\nvPtSet = []\nfor cur in uGridCurs:\t\n\tvPts = vStartPoints(cur.ToProtoType(),vMax,vAdjMax)\n\tvPtSet.append(vPts)\n\nerrors = []\n\n#add v grids to each wall sections\nfor set in vPtSet:\n\tfor pt in set:\n\t\ttry:\n\t\t\tvGrid = wall.CurtainGrid.AddGridLine(False, pt.ToXyz(), True)\n\t\texcept Exception as er:\n\t\t\terrors.append(er)\n\t\t\t\ndoc.Regenerate()\t\n#collect panel types\npanelTypeColl = FilteredElementCollector(doc).OfClass(PanelType).WhereElementIsElementType()\nsysPanelTypes = [e for e in panelTypeColl if e.LookupParameter(\"Type Name\").AsString().StartsWith(\"Solid\")]\n#make sure have matched name system panel type created\n\n#replace panels\t\nallPanels = []\nfor id in wall.CurtainGrid.GetPanelIds():\n\t#random pick a panel to change\n\tindx = random.randint(0,len(sysPanelTypes)-1)\n\tpanel = sysPanelTypes[indx]\n\te = doc.GetElement(id)#panel\n\te.ChangeTypeId(panel.Id)#set all panel to defult\n\tallPanels.append(e)\n\t\t\n\t\nTransactionManager.Instance.TransactionTaskDone()\t\n\nOUT  = allPanels,errors  #vPts,uGrids,vPtSet\n\n",
+      "Engine": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "1da5fb1f04234530b612c239427bd6a8",
+      "Inputs": [
+        {
+          "Id": "80095282313c4327a06aa1e2ee222a18",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "67e9cf4a731a4c829a3a28138e958ed9",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "da8ef4b909294475ad760a184f0d175d",
+          "Name": "IN[2]",
+          "Description": "Input #2",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "5b3dbf4752694dd7bb99dfd72a43c385",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.DoubleSlider, CoreNodeModels",
+      "NodeType": "NumberInputNode",
+      "NumberType": "Double",
+      "MaximumValue": 5.0,
+      "MinimumValue": 0.0,
+      "StepValue": 0.1,
+      "InputValue": 1.5,
+      "Id": "5020e6cb4113430ebcdedff92a2ee30a",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "4735d1e793e24de9837ec5ec2f7c896a",
+          "Name": "",
+          "Description": "Double",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A slider that produces numeric values."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.DoubleSlider, CoreNodeModels",
+      "NodeType": "NumberInputNode",
+      "NumberType": "Double",
+      "MaximumValue": 20.0,
+      "MinimumValue": 0.0,
+      "StepValue": 0.1,
+      "InputValue": 13.9,
+      "Id": "e421e121872745ad82d7b7c066ee7963",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "737ce5af45a64a349fced3588de2265f",
+          "Name": "",
+          "Description": "Double",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A slider that produces numeric values."
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "a34e34e074a0489caab7535f785712af",
+      "End": "80095282313c4327a06aa1e2ee222a18",
+      "Id": "c369e34423234a8dba22582197dd092a"
+    },
+    {
+      "Start": "4735d1e793e24de9837ec5ec2f7c896a",
+      "End": "67e9cf4a731a4c829a3a28138e958ed9",
+      "Id": "dfad62a840824bbaa0f4dc77933fcf03"
+    },
+    {
+      "Start": "737ce5af45a64a349fced3588de2265f",
+      "End": "da8ef4b909294475ad760a184f0d175d",
+      "Id": "72e76ad4e2064ca1b3682cb843805c7f"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 100.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.10.1.3976",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -121.55798663108159,
+      "EyeY": 77.233710104063221,
+      "EyeZ": 165.09328707406604,
+      "LookX": -65.440922365500441,
+      "LookY": -57.233710104063221,
+      "LookZ": -89.0523849363097,
+      "UpX": -0.15326298530246341,
+      "UpY": 0.96592582628906865,
+      "UpZ": -0.20856115516547569
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Select Model Element",
+        "Id": "edfe3e417c9844ed97e9b7ab080fdea9",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 4027.6331998111546,
+        "Y": 2389.9079719672873
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Create Wall and Curtain Grids",
+        "Id": "1da5fb1f04234530b612c239427bd6a8",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 4492.0385789455,
+        "Y": 2432.7052197915777
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "vAdj",
+        "Id": "5020e6cb4113430ebcdedff92a2ee30a",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 4027.6331998111546,
+        "Y": 2527.7901909258826
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "vMax Space",
+        "Id": "e421e121872745ad82d7b7c066ee7963",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 4027.6331998111546,
+        "Y": 2626.3052197915781
+      }
+    ],
+    "Annotations": [],
+    "X": -2586.1397368543116,
+    "Y": -1326.1666968452719,
+    "Zoom": 0.66006365069533846
+  }
+}
